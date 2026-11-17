@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Citrus Jelly</title>
+<meta name="description" content="An interactive WebGPU soft-body gummy orange slice. Grab. Stretch. Let go.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3ECDF;
+    --ink: #2A211C;
+    --muted: #8C7F73;
+    --line: rgba(42, 33, 28, 0.10);
+    --panel: rgba(255, 251, 244, 0.72);
+    --accent: #EE7A16;
+    --serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  canvas#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; cursor: default; outline: none; }
+  canvas#gl.can-grab { cursor: grab; }
+  canvas#gl.grabbing { cursor: grabbing; }
+
+  .masthead { position: fixed; left: clamp(24px, 5.5vw, 96px); top: clamp(28px, 8vh, 96px); pointer-events: none; max-width: 34vw; }
+  .eyebrow { margin: 0 0 18px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  h1 { margin: 0; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: clamp(64px, 8.6vw, 156px); line-height: 0.86; letter-spacing: -0.02em; }
+  h1 .dot { color: var(--accent); transition: color .4s; }
+  .lede { margin: 26px 0 0; max-width: 300px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+
+  .panel { position: fixed; right: clamp(20px, 4.5vw, 80px); top: 50%; transform: translateY(-50%); width: 272px; padding: 22px 22px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 20px 50px -30px rgba(80, 50, 20, .35); }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  .panel-head .fps { font-variant-numeric: tabular-nums; letter-spacing: .04em; text-transform: none; }
+  .slider { display: block; margin-bottom: 16px; }
+  .slider .row { display: flex; justify-content: space-between; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .slider output { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 400; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; cursor: pointer; --p: 50%; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), rgba(42,33,28,.13) var(--p)); }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), rgba(42,33,28,.13) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8.5px; border-radius: 50%; background: #fffdf8; border: 1px solid rgba(42,33,28,.18); box-shadow: 0 2px 6px rgba(60,35,10,.18); transition: transform .15s; }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #fffdf8; border: 1px solid rgba(42,33,28,.18); box-shadow: 0 2px 6px rgba(60,35,10,.18); }
+  input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+  input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  .btns { display: grid; gap: 8px; margin: 6px 0 18px; }
+  .btns .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button { font: inherit; font-size: 13px; font-weight: 500; color: var(--ink); background: rgba(255,255,255,.55); border: 1px solid var(--line); border-radius: 999px; height: 40px; padding: 0 16px; cursor: pointer; transition: background .2s, transform .1s, border-color .2s; -webkit-tap-highlight-color: transparent; }
+  button:hover { background: #fff; border-color: rgba(42,33,28,.2); }
+  button:active { transform: scale(.97); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--ink); color: #FBF6EE; border-color: var(--ink); }
+  button.primary:hover { background: #3a2e27; }
+  button[aria-pressed=true] { background: var(--ink); color: #FBF6EE; }
+
+  .toggles { display: flex; gap: 18px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .tog { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500; cursor: pointer; user-select: none; min-height: 28px; }
+  .tog input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tog .sw { width: 30px; height: 18px; border-radius: 99px; background: rgba(42,33,28,.15); position: relative; transition: background .2s; flex: none; }
+  .tog .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s; }
+  .tog input:checked + .sw { background: var(--accent); }
+  .tog input:checked + .sw::after { transform: translateX(12px); }
+  .tog input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .presets-label { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 10px; }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .swatch { height: auto; padding: 8px 4px 7px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; background: transparent; border-color: transparent; }
+  .swatch i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), transparent 45%), var(--c); box-shadow: inset 0 -3px 6px rgba(0,0,0,.12); display: block; }
+  .swatch[aria-checked=true] { background: rgba(255,255,255,.75); border-color: var(--line); }
+
+  .hint { position: fixed; left: 50%; bottom: clamp(24px, 6vh, 56px); transform: translateX(-50%); font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); pointer-events: none; display: flex; align-items: center; gap: 12px; white-space: nowrap; transition: opacity .8s; }
+  .hint .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); position: relative; transition: background .4s; }
+  .hint .pulse::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid var(--accent); opacity: .6; animation: ping 2.2s ease-out infinite; }
+  @keyframes ping { from { transform: scale(.4); opacity: .8; } to { transform: scale(1.6); opacity: 0; } }
+  .hint.quiet { opacity: .45; }
+
+  .meta { position: fixed; left: clamp(24px, 5.5vw, 96px); bottom: clamp(24px, 6vh, 56px); font-size: 11px; letter-spacing: .06em; color: var(--muted); pointer-events: none; font-variant-numeric: tabular-nums; }
+
+  #fallback { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; pointer-events: none; }
+  #fallback[hidden] { display: none; }
+  #fallback .card { pointer-events: auto; max-width: 420px; background: #fffaf2; border: 1px solid var(--line); border-radius: 20px; padding: 28px 28px 24px; box-shadow: 0 30px 60px -40px rgba(80,50,20,.5); }
+  #fallback h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 34px; margin: 0 0 10px; }
+  #fallback p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: #5d5148; }
+  #fallback code { font-size: 12.5px; background: rgba(42,33,28,.06); padding: 1px 5px; border-radius: 4px; }
+
+  @media (max-width: 760px) {
+    .masthead { left: 20px; top: max(20px, env(safe-area-inset-top)); max-width: none; }
+    .eyebrow { margin-bottom: 8px; font-size: 10px; }
+    h1 { font-size: 52px; line-height: .9; }
+    h1 br { display: none; }
+    .lede { display: none; }
+    .meta { display: none; }
+    .panel { top: auto; transform: none; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; padding: 14px 16px 12px; border-radius: 18px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+    .panel-head { display: none; }
+    .slider { margin-bottom: 6px; }
+    .slider .row { font-size: 12px; margin-bottom: 0; }
+    input[type=range] { height: 34px; }
+    .btns { grid-column: 1 / -1; grid-template-columns: 1.4fr 1fr; margin: 4px 0 10px; }
+    .btns .pair { grid-template-columns: 1fr 1fr; }
+    button { height: 44px; }
+    .toggles { grid-column: 1 / 2; flex-direction: column; gap: 6px; padding: 0; border: 0; margin: 0; justify-content: center; }
+    .flavour { grid-column: 2 / 3; }
+    .presets-label { display: none; }
+    .swatch { padding: 6px 2px; font-size: 11px; gap: 4px; }
+    .swatch i { width: 22px; height: 22px; }
+    .hint { bottom: auto; top: calc(var(--panel-top, 70vh) - 46px); font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Interactive 3D gummy orange slice. Drag it to stretch it." tabindex="0"></canvas>
+
+<header class="masthead">
+  <p class="eyebrow">Soft matter study · Nº 01</p>
+  <h1>Citrus <br>Jelly<span class="dot">.</span></h1>
+  <p class="lede">A gummy orange slice simulated as a volumetric elastic body, drawn live with WebGPU. Pull anywhere and watch it remember its shape.</p>
+</header>
+
+<aside class="panel" aria-label="Controls">
+  <div class="panel-head"><span>Controls</span><span class="fps" id="fps">—</span></div>
+  <label class="slider"><span class="row"><span>Firmness</span><output id="firmOut">50</output></span>
+    <input type="range" id="firm" min="0" max="100" value="50"></label>
+  <label class="slider"><span class="row"><span>Internal damping</span><output id="dampOut">45</output></span>
+    <input type="range" id="damp" min="0" max="100" value="45"></label>
+  <div class="btns">
+    <button id="nudge" class="primary">Give it a nudge</button>
+    <div class="pair"><button id="reset">Reset</button><button id="pause" aria-pressed="false">Pause</button></div>
+  </div>
+  <div class="toggles">
+    <label class="tog"><input type="checkbox" id="mesh"><span class="sw"></span>Mesh</label>
+    <label class="tog"><input type="checkbox" id="slow"><span class="sw"></span>¼ speed</label>
+  </div>
+  <div class="flavour">
+    <div class="presets-label">Flavour</div>
+    <div class="presets" role="radiogroup" aria-label="Colour preset">
+      <button class="swatch" role="radio" aria-checked="true" data-preset="orange"><i style="--c:#F7821B"></i>Orange</button>
+      <button class="swatch" role="radio" aria-checked="false" data-preset="blood"><i style="--c:#B8202E"></i>Blood Orange</button>
+      <button class="swatch" role="radio" aria-checked="false" data-preset="lemon"><i style="--c:#F5D332"></i>Lemon</button>
+    </div>
+  </div>
+</aside>
+
+<div class="hint" id="hint"><span class="pulse"></span>Grab. Stretch. Let go.</div>
+<div class="meta" id="meta">WebGPU · XPBD soft body</div>
+
+<div id="fallback" hidden><div class="card">
+  <h2>WebGPU isn’t available.</h2>
+  <p id="fallbackReason">This browser or device can’t create a WebGPU context, so the jelly can’t be simulated and rendered here.</p>
+  <p>Try a recent version of Chrome, Edge or Safari (18+) on a device with hardware acceleration enabled. In Firefox, WebGPU may need to be switched on via <code>dom.webgpu.enabled</code>.</p>
+</div></div>
+
+<!-- ============================ SOFT-BODY SIMULATION (no DOM deps) ============================ -->
+<script id="sim">
+'use strict';
+/*
+ * Volumetric XPBD soft body for a half-disc slab (the slice).
+ * Lattice: polar rings x angular spokes x thickness layers, split into tetrahedra (Kuhn subdivision).
+ * Constraints: tetra edges (distance, compliant), tetra volumes (near-incompressible),
+ * hard stretch/compress limits, ground contact with friction, soft grab constraint.
+ * Fixed step H with small substeps (one Gauss-Seidel sweep per substep).
+ */
+class CitrusSim {
+  constructor() {
+    this.RAD = 1.0; this.HT = 0.25;
+    this.radii = [0, 0.24, 0.48, 0.70, 0.87, 1.0];
+    this.na = 25; this.nz = 3;
+    this.H = 1 / 240; this.substeps = 3;
+    this.gravity = -14;
+    this.firmness = 0.5; this.damping = 0.45;
+    this.dropHeight = 0.55;
+    this.grabCompliance = 4e-4;
+    this.friction = 0.9;
+    this._build();
+    this.reset();
+  }
+  idx(ring, a, l) { return ring === 0 ? l : this.nz + ((ring - 1) * this.na + a) * this.nz + l; }
+
+  _build() {
+    const { radii, na, nz, HT } = this, nr = radii.length;
+    const N = nz + (nr - 1) * na * nz; this.N = N;
+    const X0 = new Float32Array(N * 3), ring = new Uint8Array(N);
+    for (let l = 0; l < nz; l++) X0[l * 3 + 2] = -HT + 2 * HT * l / (nz - 1);
+    for (let r = 1; r < nr; r++) for (let a = 0; a < na; a++) for (let l = 0; l < nz; l++) {
+      const i = this.idx(r, a, l), th = Math.PI * a / (na - 1);
+      X0[i * 3] = radii[r] * Math.cos(th);
+      X0[i * 3 + 1] = (a === 0 || a === na - 1) ? 0 : radii[r] * Math.sin(th);
+      X0[i * 3 + 2] = -HT + 2 * HT * l / (nz - 1);
+      ring[i] = r;
+    }
+    this.X0 = X0; this.ring = ring;
+
+    // tetrahedra
+    const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    const tets = [], vols = [], cellOf = []; let cells = 0;
+    const P = (i) => [X0[i * 3], X0[i * 3 + 1], X0[i * 3 + 2]];
+    const vol = (a, b, c, d) => {
+      const A = P(a), B = P(b), C = P(c), D = P(d);
+      const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], v = [C[0] - A[0], C[1] - A[1], C[2] - A[2]], w = [D[0] - A[0], D[1] - A[1], D[2] - A[2]];
+      return ((u[1] * v[2] - u[2] * v[1]) * w[0] + (u[2] * v[0] - u[0] * v[2]) * w[1] + (u[0] * v[1] - u[1] * v[0]) * w[2]) / 6;
+    };
+    for (let i = 0; i < nr - 1; i++) for (let j = 0; j < na - 1; j++) for (let k = 0; k < nz - 1; k++) {
+      const corner = (c) => this.idx(i + c[0], j + c[1], k + c[2]);
+      for (const p of perms) {
+        const c = [0, 0, 0], list = [corner(c)];
+        for (const ax of p) { c[ax] = 1; list.push(corner(c)); }
+        if (new Set(list).size < 4) continue;
+        let V = vol(...list);
+        if (Math.abs(V) < 1e-7) continue;
+        if (V < 0) { [list[2], list[3]] = [list[3], list[2]]; V = -V; }
+        tets.push(...list); vols.push(V); cellOf.push(i === 0 ? 'w' + Math.floor(j / 6) + '_' + k : cells);
+      }
+      cells++;
+    }
+    this.nt = vols.length;
+    this.tI = Int32Array.from(tets); this.tV0 = Float32Array.from(vols);
+    // group tets per lattice cell: one volume constraint per cell avoids the locking of per-tet incompressibility.
+    // The skinny wedge cells around the centre are merged in groups of 6 (they are badly conditioned alone).
+    const groups = new Map();
+    for (let t = 0; t < this.nt; t++) {
+      const g = cellOf[t]; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(t);
+    }
+    const cN = [], cNs = [0], cT = [], cTs = [0], cV0 = [];
+    for (const list of groups.values()) {
+      const base = cN.length; let V0 = 0;
+      for (const t of list) {
+        for (let q = 0; q < 4; q++) {
+          const n = tets[t * 4 + q]; let slot = cN.indexOf(n, base);
+          if (slot < 0) { slot = cN.length; cN.push(n); }
+          cT.push(slot - base);
+        }
+        V0 += vols[t];
+      }
+      cNs.push(cN.length); cTs.push(cT.length); cV0.push(V0);
+    }
+    this.nc = cV0.length;
+    this.cN = Int32Array.from(cN); this.cNs = Int32Array.from(cNs); this.cT = Int32Array.from(cT); this.cTs = Int32Array.from(cTs); this.cV0 = Float32Array.from(cV0);
+    this._g = new Float64Array(64 * 3);
+
+    // masses from tet volumes
+    const m = new Float64Array(N);
+    for (let t = 0; t < this.nt; t++) for (let q = 0; q < 4; q++) m[this.tI[t * 4 + q]] += vols[t] / 4;
+    let tot = 0; for (let i = 0; i < N; i++) tot += m[i];
+    this.w = new Float32Array(N); this.mass = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const mi = Math.max(m[i] / tot, 1e-4); this.mass[i] = mi; this.w[i] = 1 / mi; }
+
+    // unique edges
+    const seen = new Map();
+    const eA = [], eB = [], eL = [], eK = [], eMax = [], eRind = [];
+    for (let t = 0; t < this.nt; t++) for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) {
+      let i = this.tI[t * 4 + a], j = this.tI[t * 4 + b]; if (i > j) [i, j] = [j, i];
+      const key = i * N + j; if (seen.has(key)) continue; seen.set(key, 1);
+      const L = Math.hypot(X0[i * 3] - X0[j * 3], X0[i * 3 + 1] - X0[j * 3 + 1], X0[i * 3 + 2] - X0[j * 3 + 2]);
+      const rind = Math.min(ring[i], ring[j]) >= 4;
+      eA.push(i); eB.push(j); eL.push(L);
+      eK.push((rind ? 0.11 : 1.0) * (L / 0.15));   // compliance multiplier (rind is ~9x stiffer)
+      eMax.push(rind ? 1.30 : 2.1); eRind.push(rind ? 1 : 0);
+    }
+    this.ne = eA.length;
+    this.eA = Int32Array.from(eA); this.eB = Int32Array.from(eB); this.eL = Float32Array.from(eL);
+    this.eK = Float32Array.from(eK); this.eMax = Float32Array.from(eMax); this.eRind = Uint8Array.from(eRind);
+
+    this.x = new Float32Array(N * 3); this.p = new Float32Array(N * 3); this.v = new Float32Array(N * 3);
+    this.q = [0, 0, 0, 1]; this.rotM = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    this.c0 = [0, 0, 0];
+    for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) this.c0[d] += this.mass[i] * X0[i * 3 + d];
+    this.centroid = [0, 0, 0];
+  }
+
+  reset() {
+    const { N, X0 } = this;
+    for (let i = 0; i < N; i++) {
+      this.x[i * 3] = X0[i * 3]; this.x[i * 3 + 1] = X0[i * 3 + 1] + this.dropHeight; this.x[i * 3 + 2] = X0[i * 3 + 2];
+    }
+    this.v.fill(0); this.p.set(this.x);
+    this.grabI = null; this.q = [0, 0, 0, 1];
+    this.updateRotation();
+  }
+
+  // compliance as a function of the Firmness slider (0..1)
+  fleshCompliance() { return Math.pow(10, -0.7 - 1.35 * this.firmness); }
+  // softer jelly needs more damping for the same perceived settle time
+  edgeDampK() { return (0.008 + 0.16 * Math.pow(this.damping, 1.5)) * (1.5 - this.firmness); }
+
+  // trilinear embedding of a rest-space point into the lattice
+  embed(px, py, pz) {
+    const { radii, na, nz, HT } = this, nr = radii.length;
+    const r = Math.hypot(px, py);
+    let th = Math.atan2(Math.max(py, 0), px); th = Math.min(Math.max(th, 0), Math.PI);
+    let i = 0; while (i < nr - 2 && r > radii[i + 1]) i++;
+    const fu = Math.min(Math.max((r - radii[i]) / (radii[i + 1] - radii[i]), 0), 1);
+    const fj = th / (Math.PI / (na - 1)); const j = Math.min(Math.floor(fj), na - 2); const fv = Math.min(Math.max(fj - j, 0), 1);
+    const zl = Math.min(Math.max((pz + HT) / (2 * HT), 0), 1) * (nz - 1); const k = Math.min(Math.floor(zl), nz - 2); const fw = zl - k;
+    const idx = new Int32Array(8), w = new Float32Array(8);
+    let o = 0;
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) {
+      idx[o] = this.idx(i + a, j + b, k + c);
+      w[o] = (a ? fu : 1 - fu) * (b ? fv : 1 - fv) * (c ? fw : 1 - fw); o++;
+    }
+    return { idx, w };
+  }
+  pointOf(emb, src = this.x) {
+    let x = 0, y = 0, z = 0;
+    for (let k = 0; k < 8; k++) { const n = emb.idx[k] * 3, w = emb.w[k]; x += w * src[n]; y += w * src[n + 1]; z += w * src[n + 2]; }
+    return [x, y, z];
+  }
+
+  grab(emb, target) {
+    const m = new Map();
+    for (let k = 0; k < 8; k++) if (emb.w[k] > 1e-6) m.set(emb.idx[k], (m.get(emb.idx[k]) || 0) + emb.w[k]);
+    this.grabI = Int32Array.from(m.keys()); this.grabW = Float32Array.from(m.values());
+    this.target = target.slice();
+  }
+  setTarget(t) { if (this.target) this.target = t.slice(); }
+  release() { this.grabI = null; }
+
+  nudge(rand = Math.random) {
+    this.release();
+    const s = rand() < 0.5 ? -1 : 1;
+    const c = this.centroidNow();
+    const vx = s * (0.25 + 0.35 * rand()), vy = 3.0 + 0.6 * rand(), vz = 0;
+    const wz = -s * (0.6 + 0.6 * rand()), wx = 0;
+    for (let i = 0; i < this.N; i++) {
+      const rx = this.x[i * 3] - c[0], ry = this.x[i * 3 + 1] - c[1], rz = this.x[i * 3 + 2] - c[2];
+      // v += V + w x r  (w = (wx,0,wz))
+      this.v[i * 3] += vx + (0 * rz - wz * ry);
+      this.v[i * 3 + 1] += vy + (wz * rx - wx * rz);
+      this.v[i * 3 + 2] += vz + (wx * ry - 0 * rx);
+    }
+  }
+
+  centroidNow() {
+    const c = [0, 0, 0];
+    for (let i = 0; i < this.N; i++) { const m = this.mass[i]; c[0] += m * this.x[i * 3]; c[1] += m * this.x[i * 3 + 1]; c[2] += m * this.x[i * 3 + 2]; }
+    return c;
+  }
+
+  step() { const h = this.H / this.substeps; for (let s = 0; s < this.substeps; s++) this._substep(h); }
+
+  _substep(h) {
+    const { x, p, v, w, N } = this;
+    const gh = this.gravity * h;
+    for (let i = 0; i < N; i++) {
+      const o = i * 3;
+      v[o + 1] += gh;
+      p[o] = x[o]; p[o + 1] = x[o + 1]; p[o + 2] = x[o + 2];
+      x[o] += v[o] * h; x[o + 1] += v[o + 1] * h; x[o + 2] += v[o + 2] * h;
+    }
+    const ih2 = 1 / (h * h);
+
+    // --- distance (edge) constraints
+    const aE = this.fleshCompliance() * ih2;
+    const { eA, eB, eL, eK, ne } = this;
+    for (let e = 0; e < ne; e++) {
+      const ia = eA[e], ib = eB[e], a = ia * 3, b = ib * 3;
+      const dx = x[a] - x[b], dy = x[a + 1] - x[b + 1], dz = x[a + 2] - x[b + 2];
+      const L = Math.sqrt(dx * dx + dy * dy + dz * dz); if (L < 1e-9) continue;
+      const wa = w[ia], wb = w[ib];
+      const s = -(L - eL[e]) / (wa + wb + aE * eK[e]) / L;
+      x[a] += wa * s * dx; x[a + 1] += wa * s * dy; x[a + 2] += wa * s * dz;
+      x[b] -= wb * s * dx; x[b + 1] -= wb * s * dy; x[b + 2] -= wb * s * dz;
+    }
+
+    // --- volume constraints, one per lattice cell (near-incompressible gummy => flesh narrows when stretched)
+    const aV = 1e-7 * ih2;
+    const { cN, cNs, cT, cTs, cV0, nc } = this, G = this._g;
+    for (let c = 0; c < nc; c++) {
+      const nb = cNs[c], nn = cNs[c + 1] - nb, tb = cTs[c], te = cTs[c + 1];
+      G.fill(0, 0, nn * 3);
+      let V = 0;
+      for (let t = tb; t < te; t += 4) {
+        const s0 = cT[t] * 3, s1 = cT[t + 1] * 3, s2 = cT[t + 2] * 3, s3 = cT[t + 3] * 3;
+        const i0 = cN[nb + cT[t]] * 3, i1 = cN[nb + cT[t + 1]] * 3, i2 = cN[nb + cT[t + 2]] * 3, i3 = cN[nb + cT[t + 3]] * 3;
+        const x0 = x[i0], y0 = x[i0 + 1], z0 = x[i0 + 2], x1 = x[i1], y1 = x[i1 + 1], z1 = x[i1 + 2];
+        const x2 = x[i2], y2 = x[i2 + 1], z2 = x[i2 + 2], x3 = x[i3], y3 = x[i3 + 1], z3 = x[i3 + 2];
+        let ax = x3 - x1, ay = y3 - y1, az = z3 - z1, bx = x2 - x1, by = y2 - y1, bz = z2 - z1;
+        G[s0] += (ay * bz - az * by) / 6; G[s0 + 1] += (az * bx - ax * bz) / 6; G[s0 + 2] += (ax * by - ay * bx) / 6;
+        ax = x2 - x0; ay = y2 - y0; az = z2 - z0; bx = x3 - x0; by = y3 - y0; bz = z3 - z0;
+        G[s1] += (ay * bz - az * by) / 6; G[s1 + 1] += (az * bx - ax * bz) / 6; G[s1 + 2] += (ax * by - ay * bx) / 6;
+        ax = x3 - x0; ay = y3 - y0; az = z3 - z0; bx = x1 - x0; by = y1 - y0; bz = z1 - z0;
+        G[s2] += (ay * bz - az * by) / 6; G[s2 + 1] += (az * bx - ax * bz) / 6; G[s2 + 2] += (ax * by - ay * bx) / 6;
+        ax = x1 - x0; ay = y1 - y0; az = z1 - z0; bx = x2 - x0; by = y2 - y0; bz = z2 - z0;
+        const gx = (ay * bz - az * by) / 6, gy = (az * bx - ax * bz) / 6, gz = (ax * by - ay * bx) / 6;
+        G[s3] += gx; G[s3 + 1] += gy; G[s3 + 2] += gz;
+        V += gx * (x3 - x0) + gy * (y3 - y0) + gz * (z3 - z0);
+      }
+      let sw = 0;
+      for (let k = 0; k < nn; k++) { const g = k * 3; sw += w[cN[nb + k]] * (G[g] * G[g] + G[g + 1] * G[g + 1] + G[g + 2] * G[g + 2]); }
+      if (sw < 1e-14) continue;
+      const dl = -(V - cV0[c]) / (sw + aV);
+      for (let k = 0; k < nn; k++) { const n = cN[nb + k], f = dl * w[n], o = n * 3, g = k * 3; x[o] += f * G[g]; x[o + 1] += f * G[g + 1]; x[o + 2] += f * G[g + 2]; }
+    }
+
+    // --- grab (soft attachment of the embedded point to the pointer target)
+    if (this.grabI) {
+      const gi = this.grabI, gw = this.grabW, T = this.target;
+      let px = 0, py = 0, pz = 0, W = 0;
+      for (let k = 0; k < gi.length; k++) { const n = gi[k] * 3; px += gw[k] * x[n]; py += gw[k] * x[n + 1]; pz += gw[k] * x[n + 2]; W += gw[k] * gw[k] * w[gi[k]]; }
+      const dx = px - T[0], dy = py - T[1], dz = pz - T[2];
+      const C = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (C > 1e-7) {
+        const dl = -C / (W + this.grabCompliance * ih2) / C;
+        for (let k = 0; k < gi.length; k++) {
+          const n = gi[k] * 3, f = dl * gw[k] * w[gi[k]];
+          x[n] += f * dx; x[n + 1] += f * dy; x[n + 2] += f * dz;
+        }
+      }
+    }
+
+    // --- hard strain limits: no over-stretching, no collapse
+    const { eMax } = this;
+    for (let e = 0; e < ne; e++) {
+      const ia = eA[e], ib = eB[e], a = ia * 3, b = ib * 3;
+      const dx = x[a] - x[b], dy = x[a + 1] - x[b + 1], dz = x[a + 2] - x[b + 2];
+      const L = Math.sqrt(dx * dx + dy * dy + dz * dz); if (L < 1e-9) continue;
+      const hi = eL[e] * eMax[e], lo = eL[e] * 0.35;
+      let C = 0; if (L > hi) C = L - hi; else if (L < lo) C = L - lo; else continue;
+      const wa = w[ia], wb = w[ib];
+      const s = -C / (wa + wb) / L;
+      x[a] += wa * s * dx; x[a + 1] += wa * s * dy; x[a + 2] += wa * s * dz;
+      x[b] -= wb * s * dx; x[b + 1] -= wb * s * dy; x[b + 2] -= wb * s * dz;
+    }
+
+    // --- ground contact (y = 0) with friction, plus soft stage bounds
+    for (let i = 0; i < N; i++) {
+      const o = i * 3;
+      if (x[o + 1] < 0) {
+        x[o + 1] = 0;
+        const fr = this.friction;
+        x[o] -= (x[o] - p[o]) * fr; x[o + 2] -= (x[o + 2] - p[o + 2]) * fr;
+      }
+      if (x[o] > 2.5) x[o] = 2.5; else if (x[o] < -2.5) x[o] = -2.5;
+      if (x[o + 2] > 1.8) x[o + 2] = 1.8; else if (x[o + 2] < -1.8) x[o + 2] = -1.8;
+      if (x[o + 1] > 4.0) x[o + 1] = 4.0;
+    }
+
+    // --- velocities
+    const ih = 1 / h, vmax = 22;
+    for (let i = 0; i < N * 3; i += 3) {
+      let vx = (x[i] - p[i]) * ih, vy = (x[i + 1] - p[i + 1]) * ih, vz = (x[i + 2] - p[i + 2]) * ih;
+      const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (sp > vmax) { const f = vmax / sp; vx *= f; vy *= f; vz *= f; }
+      v[i] = vx; v[i + 1] = vy; v[i + 2] = vz;
+    }
+
+    // --- internal damping: kill relative velocity along edges (leaves rigid motion alone)
+    const kd = this.edgeDampK();
+    for (let e = 0; e < ne; e++) {
+      const ia = eA[e], ib = eB[e], a = ia * 3, b = ib * 3;
+      let dx = x[a] - x[b], dy = x[a + 1] - x[b + 1], dz = x[a + 2] - x[b + 2];
+      const L = Math.sqrt(dx * dx + dy * dy + dz * dz); if (L < 1e-9) continue;
+      dx /= L; dy /= L; dz /= L;
+      const rv = (v[a] - v[b]) * dx + (v[a + 1] - v[b + 1]) * dy + (v[a + 2] - v[b + 2]) * dz;
+      const wa = w[ia], wb = w[ib];
+      const c = rv * kd / (wa + wb);
+      v[a] -= wa * c * dx; v[a + 1] -= wa * c * dy; v[a + 2] -= wa * c * dz;
+      v[b] += wb * c * dx; v[b + 1] += wb * c * dy; v[b + 2] += wb * c * dz;
+    }
+    const air = 1 - 0.25 * h;
+    for (let i = 0; i < N * 3; i++) v[i] *= air;
+  }
+
+  // best-fit rigid rotation (shape matching) — used to orient the interior volume shading
+  updateRotation() {
+    const { N, x, X0, mass, c0 } = this;
+    const c = this.centroidNow(); this.centroid = c;
+    const A = new Float64Array(9); // column-major A = sum m (x-c)(X0-c0)^T
+    for (let i = 0; i < N; i++) {
+      const m = mass[i];
+      const px = x[i * 3] - c[0], py = x[i * 3 + 1] - c[1], pz = x[i * 3 + 2] - c[2];
+      const qx = X0[i * 3] - c0[0], qy = X0[i * 3 + 1] - c0[1], qz = X0[i * 3 + 2] - c0[2];
+      A[0] += m * px * qx; A[1] += m * py * qx; A[2] += m * pz * qx;
+      A[3] += m * px * qy; A[4] += m * py * qy; A[5] += m * pz * qy;
+      A[6] += m * px * qz; A[7] += m * py * qz; A[8] += m * pz * qz;
+    }
+    let q = this.q;
+    const R = new Float64Array(9);
+    for (let it = 0; it < 12; it++) {
+      const [qx, qy, qz, qw] = q;
+      R[0] = 1 - 2 * (qy * qy + qz * qz); R[1] = 2 * (qx * qy + qz * qw); R[2] = 2 * (qx * qz - qy * qw);
+      R[3] = 2 * (qx * qy - qz * qw); R[4] = 1 - 2 * (qx * qx + qz * qz); R[5] = 2 * (qy * qz + qx * qw);
+      R[6] = 2 * (qx * qz + qy * qw); R[7] = 2 * (qy * qz - qx * qw); R[8] = 1 - 2 * (qx * qx + qy * qy);
+      let ox = 0, oy = 0, oz = 0, den = 0;
+      for (let c2 = 0; c2 < 3; c2++) {
+        const r0 = R[c2 * 3], r1 = R[c2 * 3 + 1], r2 = R[c2 * 3 + 2], a0 = A[c2 * 3], a1 = A[c2 * 3 + 1], a2 = A[c2 * 3 + 2];
+        ox += r1 * a2 - r2 * a1; oy += r2 * a0 - r0 * a2; oz += r0 * a1 - r1 * a0;
+        den += r0 * a0 + r1 * a1 + r2 * a2;
+      }
+      const s = 1 / (Math.abs(den) + 1e-12); ox *= s; oy *= s; oz *= s;
+      const ang = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      if (ang < 1e-9) break;
+      const ha = 0.5 * ang, sn = Math.sin(ha) / ang;
+      const dq = [ox * sn, oy * sn, oz * sn, Math.cos(ha)];
+      // q = dq * q
+      q = [dq[3] * qx + dq[0] * qw + dq[1] * qz - dq[2] * qy,
+           dq[3] * qy - dq[0] * qz + dq[1] * qw + dq[2] * qx,
+           dq[3] * qz + dq[0] * qy - dq[1] * qx + dq[2] * qw,
+           dq[3] * qw - dq[0] * qx - dq[1] * qy - dq[2] * qz];
+      const n = Math.hypot(...q); q = q.map(t => t / n);
+    }
+    this.q = q;
+    const [qx, qy, qz, qw] = q;
+    const M = this.rotM;
+    M[0] = 1 - 2 * (qy * qy + qz * qz); M[1] = 2 * (qx * qy + qz * qw); M[2] = 2 * (qx * qz - qy * qw);
+    M[3] = 2 * (qx * qy - qz * qw); M[4] = 1 - 2 * (qx * qx + qz * qz); M[5] = 2 * (qy * qz + qx * qw);
+    M[6] = 2 * (qx * qz + qy * qw); M[7] = 2 * (qy * qz - qx * qw); M[8] = 1 - 2 * (qx * qx + qy * qy);
+  }
+}
+CitrusSim.ORD = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
+if (typeof window !== 'undefined') window.CitrusSim = CitrusSim;
+</script>
+
+<!-- ============================ RENDERING + UI ============================ -->
+<script>
+'use strict';
+(() => {
+const RAD = 1.0, HT = 0.25, RHO = 0.09;
+
+// ---------- presets (sRGB) ----------
+const PRESETS = {
+  orange: { flesh: '#FFA02A', deep: '#EE660C', membrane: '#FFE7BE', pith: '#FFF2DA', rind: '#F07206', accent: '#EE7A16', shadow: [0.85, 1.0, 1.25] },
+  blood:  { flesh: '#E8402F', deep: '#7E0B22', membrane: '#FFD0BE', pith: '#FFE9DC', rind: '#E2581C', accent: '#C3273A', shadow: [0.8, 1.08, 1.12] },
+  lemon:  { flesh: '#FFE45A', deep: '#E7B90A', membrane: '#FFF8D2', pith: '#FFFCEB', rind: '#F2C814', accent: '#D4A900', shadow: [0.85, 0.95, 1.3] },
+};
+const BG = '#F3ECDF';
+const srgbToLin = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+const hexLin = (h) => [1, 3, 5].map(i => srgbToLin(parseInt(h.slice(i, i + 2), 16) / 255));
+const hexSrgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+
+// ---------- small math ----------
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scl = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+function mul4(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+function perspective(fovy, aspect, n, f) { const t = 1 / Math.tan(fovy / 2), o = new Float32Array(16); o[0] = t / aspect; o[5] = t; o[10] = f / (n - f); o[11] = -1; o[14] = n * f / (n - f); return o; }
+function lookAt(eye, at, up) {
+  const z = norm(sub(eye, at)), x = norm(cross(up, z)), y = cross(z, x), o = new Float32Array(16);
+  o[0] = x[0]; o[4] = x[1]; o[8] = x[2]; o[1] = y[0]; o[5] = y[1]; o[9] = y[2]; o[2] = z[0]; o[6] = z[1]; o[10] = z[2];
+  o[12] = -dot(x, eye); o[13] = -dot(y, eye); o[14] = -dot(z, eye); o[15] = 1; return o;
+}
+
+// ---------- procedural slice surface (rounded half-disc slab) ----------
+function buildSliceMesh() {
+  const Rin = RAD - RHO, hz = HT - RHO;
+  const thc = Math.asin(RHO / Rin), xc = Rin * Math.cos(thc);
+  const loop = [];
+  const NA = 132, NC = 8, NB = 40;
+  for (let i = 0; i <= NA; i++) { const t = thc + (Math.PI - 2 * thc) * i / NA; loop.push([Rin * Math.cos(t), Rin * Math.sin(t), Math.cos(t), Math.sin(t)]); }
+  for (let i = 1; i < NC; i++) { const f = (Math.PI - thc) + (1.5 * Math.PI - (Math.PI - thc)) * i / NC; loop.push([-xc, RHO, Math.cos(f), Math.sin(f)]); }
+  for (let i = 0; i <= NB; i++) { const x = -xc + 2 * xc * i / NB; loop.push([x, RHO, 0, -1]); }
+  for (let i = 1; i < NC; i++) { const f = -0.5 * Math.PI + (thc + 0.5 * Math.PI) * i / NC; loop.push([xc, RHO, Math.cos(f), Math.sin(f)]); }
+  const M = loop.length;
+  const pos = [], nrm = [], tri = [];
+  const prof = [], NQ = 9, NS = 4;
+  for (let q = 0; q <= NQ; q++) { const f = Math.PI / 2 * (1 - q / NQ); prof.push([RHO * Math.cos(f), hz + RHO * Math.sin(f), Math.cos(f), Math.sin(f)]); }
+  for (let s = 1; s < NS; s++) prof.push([RHO, hz - 2 * hz * s / NS, 1, 0]);
+  for (let q = 0; q <= NQ; q++) { const f = -Math.PI / 2 * q / NQ; prof.push([RHO * Math.cos(f), -hz + RHO * Math.sin(f), Math.cos(f), Math.sin(f)]); }
+  const P = prof.length;
+  for (let m = 0; m < M; m++) for (let p = 0; p < P; p++) {
+    const [bx, by, nx, ny] = loop[m], [ro, z, cr, cz] = prof[p];
+    pos.push(bx + nx * ro, by + ny * ro, z); nrm.push(nx * cr, ny * cr, cz);
+  }
+  for (let m = 0; m < M; m++) { const m2 = (m + 1) % M; for (let p = 0; p < P - 1; p++) { const a = m * P + p, b = m2 * P + p, c = m2 * P + p + 1, d = m * P + p + 1; tri.push(a, b, c, a, c, d); } }
+  const cx = 0, cy = 0.38, K = 20;
+  for (const side of [1, -1]) {
+    const base = pos.length / 3;
+    pos.push(cx, cy, side * HT); nrm.push(0, 0, side);
+    for (let k = 1; k <= K; k++) { const s = Math.pow(k / K, 0.9); for (let m = 0; m < M; m++) { pos.push(cx + (loop[m][0] - cx) * s, cy + (loop[m][1] - cy) * s, side * HT); nrm.push(0, 0, side); } }
+    const ring = (k, m) => base + 1 + (k - 1) * M + (m % M);
+    for (let m = 0; m < M; m++) tri.push(base, ring(1, m), ring(1, m + 1));
+    for (let k = 1; k < K; k++) for (let m = 0; m < M; m++) { const a = ring(k, m), b = ring(k, m + 1), c = ring(k + 1, m + 1), d = ring(k + 1, m); tri.push(a, b, c, a, c, d); }
+  }
+  // orient every triangle outward using the analytic normals
+  for (let t = 0; t < tri.length; t += 3) {
+    const [a, b, c] = [tri[t], tri[t + 1], tri[t + 2]];
+    const A = pos.slice(a * 3, a * 3 + 3), B = pos.slice(b * 3, b * 3 + 3), C = pos.slice(c * 3, c * 3 + 3);
+    const n = cross(sub(B, A), sub(C, A));
+    const an = [0, 1, 2].map(d => nrm[a * 3 + d] + nrm[b * 3 + d] + nrm[c * 3 + d]);
+    if (dot(n, an) < 0) { tri[t + 1] = c; tri[t + 2] = b; }
+  }
+  return { rest: new Float32Array(pos), idx: new Uint32Array(tri) };
+}
+
+// ---------- bubbles (rest space, inside flesh) ----------
+function makeBubbles(n) {
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const out = []; const seg = Math.PI / 8;
+  while (out.length < n) {
+    const r = 0.16 + 0.62 * rnd(); let th = 0.08 + (Math.PI - 0.16) * rnd();
+    const a = th % seg; if (Math.min(a, seg - a) * r < 0.04) continue;
+    const z = (rnd() - 0.5) * 0.3, rad = 0.010 + 0.022 * Math.pow(rnd(), 2);
+    out.push(r * Math.cos(th), r * Math.sin(th), z, rad);
+  }
+  return out;
+}
+
+// ---------- WGSL ----------
+const WGSL = /* wgsl */`
+struct U {
+  viewProj: mat4x4f,
+  eye: vec4f,
+  rot0: vec4f, rot1: vec4f, rot2: vec4f,
+  flesh: vec4f, fleshDeep: vec4f, membrane: vec4f, pith: vec4f, rind: vec4f,
+  bg: vec4f, params: vec4f, shadowTint: vec4f,
+  bubbles: array<vec4f, 16>,
+};
+@group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var<storage, read> parts: array<vec4f>;
+
+const PI = 3.14159265;
+const RAD = 1.0;
+const HT = 0.25;
+const RHO = 0.09;
+const NSEG = 8.0;
+
+// ---------------- slice ----------------
+struct VIn { @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) rest: vec3f };
+struct VOut { @builtin(position) clip: vec4f, @location(0) wpos: vec3f, @location(1) nrm: vec3f, @location(2) rest: vec3f };
+
+@vertex fn vsSlice(i: VIn) -> VOut {
+  var o: VOut;
+  o.clip = u.viewProj * vec4f(i.pos, 1.0);
+  o.wpos = i.pos; o.nrm = i.nrm; o.rest = i.rest;
+  return o;
+}
+
+fn sdSlice(p: vec3f) -> f32 {
+  let ds = max(length(p.xy) - (RAD - RHO), RHO - p.y);
+  let dz = abs(p.z) - (HT - RHO);
+  let q = vec2f(ds, dz);
+  return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - RHO;
+}
+fn hash2(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
+fn vnoise(p: vec2f) -> f32 {
+  let i = floor(p); let f = fract(p); let w = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2f(1.0, 0.0)), w.x), mix(hash2(i + vec2f(0.0, 1.0)), hash2(i + vec2f(1.0, 1.0)), w.x), w.y);
+}
+
+struct Mat { col: vec3f, s: f32, a: f32, glow: f32 };
+
+fn material(p: vec3f) -> Mat {
+  let r = length(p.xy);
+  let th = atan2(max(p.y, 0.0), p.x);
+  let segA = PI / NSEG;
+  let a = th - floor(th / segA) * segA;
+  let ang = min(a, segA - a);
+  let dm = ang * r;
+  let rindIn = RAD - 0.085;
+  let pithIn = rindIn - 0.045;
+  let wR = smoothstep(rindIn - 0.012, rindIn + 0.012, r);
+  let core = 1.0 - smoothstep(0.045, 0.10, r);
+  let pith = clamp(smoothstep(pithIn - 0.014, pithIn + 0.008, r) + core, 0.0, 1.0) * (1.0 - wR);
+  let mem = (1.0 - smoothstep(0.0022, 0.0085, dm)) * (1.0 - pith - wR);
+  let flesh = max(1.0 - wR - pith - mem, 0.0);
+  // juice vesicles: elongated radial cells
+  let n = vnoise(vec2f(r * 10.0, th * 44.0)) * 0.6 + vnoise(vec2f(r * 26.0, th * 120.0)) * 0.4;
+  let mid = smoothstep(0.0, segA * 0.5, ang);
+  let fc = mix(u.flesh.rgb, u.fleshDeep.rgb, clamp(0.15 + 0.55 * n * mid + 0.2 * r, 0.0, 1.0));
+  var m: Mat;
+  m.col = fc * flesh + u.membrane.rgb * mem + u.pith.rgb * pith + u.rind.rgb * wR;
+  m.s = (0.75 + 1.1 * n) * flesh + 7.0 * mem + 16.0 * pith + 26.0 * wR;
+  m.a = 6.5 * flesh + 1.2 * mem + 0.8 * pith + 7.0 * wR;
+  var inB = 0.0; var glow = 0.0;
+  for (var k = 0u; k < 16u; k++) {
+    let b = u.bubbles[k];
+    let d = length(p - b.xyz) - b.w;
+    inB = max(inB, 1.0 - smoothstep(-0.004, 0.001, d));
+    glow += 1.0 - smoothstep(0.0, 0.007, abs(d + 0.002));
+  }
+  m.s *= (1.0 - 0.92 * inB); m.a *= (1.0 - 0.92 * inB);
+  m.glow = glow * flesh;
+  return m;
+}
+
+fn ggx(N: vec3f, V: vec3f, L: vec3f, rough: f32) -> f32 {
+  let H = normalize(V + L);
+  let NdH = max(dot(N, H), 0.0); let NdL = max(dot(N, L), 0.0); let VdH = max(dot(V, H), 0.05);
+  let a2 = rough * rough * rough * rough;
+  let d = NdH * NdH * (a2 - 1.0) + 1.0;
+  let D = a2 / (PI * d * d);
+  let F = 0.04 + 0.96 * pow(1.0 - VdH, 5.0);
+  return D * F * NdL / (4.0 * VdH * VdH);
+}
+fn aces(x: vec3f) -> vec3f {
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0));
+}
+fn toSrgb(c: vec3f) -> vec3f {
+  let lo = c * 12.92; let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055;
+  return select(hi, lo, c <= vec3f(0.0031308));
+}
+
+@fragment fn fsSlice(i: VOut) -> @location(0) vec4f {
+  let V = normalize(u.eye.xyz - i.wpos);
+  var N = normalize(i.nrm);
+  if (dot(N, V) < 0.0) { N = normalize(N - V * dot(N, V) * 1.02); }
+  // fine pores on the rind skin
+  let rr = length(i.rest.xy);
+  let onRind = smoothstep(RAD - 0.12, RAD - 0.05, rr) * (1.0 - smoothstep(HT - 0.03, HT - 0.005, abs(i.rest.z)));
+  if (onRind > 0.0) {
+    let th = atan2(max(i.rest.y, 0.0), i.rest.x);
+    let uv = vec2f(th * 70.0, i.rest.z * 70.0);
+    let e = 0.15;
+    let n0 = vnoise(uv); let nx = vnoise(uv + vec2f(e, 0.0)); let ny = vnoise(uv + vec2f(0.0, e));
+    let t1 = normalize(cross(N, vec3f(0.0, 0.0, 1.0)) + vec3f(1e-4));
+    let t2 = normalize(cross(N, t1));
+    N = normalize(N + (t1 * (nx - n0) + t2 * (ny - n0)) * 0.55 * onRind);
+  }
+  let NdV = clamp(dot(N, V), 0.001, 1.0);
+
+  // refracted ray into the body, mapped into rest (material) space
+  let rdW = refract(-V, N, 1.0 / 1.36);
+  let rd = normalize(vec3f(dot(u.rot0.xyz, rdW), dot(u.rot1.xyz, rdW), dot(u.rot2.xyz, rdW)));
+
+  var T = vec3f(1.0);
+  var L = vec3f(0.0);
+  let dt = 0.026;
+  var t = 0.012;
+  for (var k = 0; k < 34; k++) {
+    let p = i.rest + rd * t;
+    let sd = sdSlice(p);
+    if (sd > 0.004) { break; }
+    let m = material(p);
+    let light = 0.42 + 0.75 * exp(min(sd, 0.0) * 10.0) + 0.38 * clamp(p.y, 0.0, 1.0);
+    let sig = vec3f(m.s) + m.a * (vec3f(1.0) - m.col);
+    L += T * (m.col * light * m.s * dt + vec3f(1.0, 0.96, 0.88) * m.glow * 0.9 * dt * 9.0);
+    T *= exp(-sig * dt);
+    t += dt;
+    if (max(T.r, max(T.g, T.b)) < 0.01) { break; }
+  }
+  let bg = u.bg.rgb;
+  var col = L + T * bg * 0.5;
+
+  let key = normalize(vec3f(-0.45, 0.85, 0.55));
+  let fill = normalize(vec3f(0.85, 0.35, 0.6));
+  let back = normalize(vec3f(0.3, 0.5, -0.8));
+  let wrap = clamp(dot(N, key) * 0.5 + 0.5, 0.0, 1.0);
+  col *= mix(0.68, 1.1, wrap);
+  // thin-edge glow where the back light passes through
+  col += u.flesh.rgb * pow(1.0 - NdV, 2.0) * max(dot(-V, back), 0.0) * 0.35;
+
+  let F = 0.03 + 0.97 * pow(1.0 - NdV, 5.0);
+  let Rv = reflect(-V, N);
+  var env = mix(bg * 0.85, vec3f(1.0, 0.99, 0.97), smoothstep(-0.3, 0.9, Rv.y));
+  env += vec3f(1.6) * smoothstep(0.86, 0.975, dot(Rv, key));
+  env += vec3f(0.7) * smoothstep(0.9, 0.985, dot(Rv, fill));
+  col = mix(col, env, F);
+  col += vec3f(1.0, 0.98, 0.95) * (ggx(N, V, key, 0.2) * 1.4 + ggx(N, V, fill, 0.3) * 0.5 + ggx(N, V, key, 0.5) * 0.35);
+
+  col = aces(col * u.params.x);
+  return vec4f(toSrgb(col), 1.0);
+}
+
+// ---------------- contact shadow: one soft Gaussian splat per particle, multiplied into the floor ----------------
+struct SOut { @builtin(position) clip: vec4f, @location(0) off: vec2f, @location(1) h: f32 };
+@vertex fn vsShadow(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> SOut {
+  var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let q = parts[ii];
+  let h = max(q.y, 0.0);
+  let ext = (0.22 + 0.5 * h) * 2.6;
+  let c = corners[vi] * ext;
+  var o: SOut;
+  o.clip = u.viewProj * vec4f(q.x + c.x, 0.0, q.z + c.y, 1.0);
+  o.off = c; o.h = h;
+  return o;
+}
+@fragment fn fsShadow(i: SOut) -> @location(0) vec4f {
+  let h = i.h;
+  let d2 = dot(i.off, i.off);
+  let s1 = 0.06 + 0.22 * h;
+  let s2 = 0.22 + 0.5 * h;
+  let dark = u.params.y * (exp(-5.0 * h) * exp(-d2 / (2.0 * s1 * s1)) * 1.0
+                         + 0.16 * exp(-d2 / (2.0 * s2 * s2)) / (1.0 + 1.5 * h));
+  return vec4f(dark, 0.0, 0.0, 1.0);
+}
+
+// floor composite: cream sweep * exp(-accumulated darkness), warm-tinted, dithered
+@group(1) @binding(0) var shTex: texture_2d<f32>;
+@group(1) @binding(1) var shSamp: sampler;
+struct FOut { @builtin(position) clip: vec4f, @location(0) uv: vec2f };
+@vertex fn vsFloor(@builtin(vertex_index) vi: u32) -> FOut {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  var o: FOut;
+  o.clip = vec4f(p[vi], 0.0, 1.0);
+  o.uv = p[vi] * vec2f(0.5, -0.5) + vec2f(0.5);
+  return o;
+}
+@fragment fn fsFloor(i: FOut) -> @location(0) vec4f {
+  let d = textureSample(shTex, shSamp, i.uv).r;
+  var c = u.bg.rgb * exp(-d * u.shadowTint.rgb);
+  let dither = (hash2(i.clip.xy) - 0.5) / 255.0;
+  return vec4f(toSrgb(c) + vec3f(dither), 1.0);
+}
+
+// ---------------- simulation lattice overlay ----------------
+@vertex fn vsWire(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+  let q = parts[vi];
+  return u.viewProj * vec4f(q.xyz, 1.0);
+}
+@fragment fn fsWire() -> @location(0) vec4f { return vec4f(0.17, 0.12, 0.10, 0.38); }
+`;
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+
+function showFallback(reason) {
+  $('fallback').hidden = false;
+  if (reason) $('fallbackReason').textContent = reason;
+  $('hint').style.display = 'none';
+  document.querySelector('.panel').style.opacity = '0.4';
+  document.querySelector('.panel').style.pointerEvents = 'none';
+}
+
+async function main() {
+  if (!('gpu' in navigator)) { showFallback('This browser doesn’t expose WebGPU (navigator.gpu is missing), so the jelly can’t be simulated and rendered here.'); return; }
+  let adapter, device;
+  try {
+    adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error('No suitable GPU adapter was found.');
+    device = await adapter.requestDevice();
+  } catch (e) { showFallback('WebGPU is present but no GPU device could be created (' + (e.message || e) + ').'); return; }
+  device.lost.then((info) => { if (info.reason !== 'destroyed') showFallback('The GPU device was lost (' + info.message + '). Reload the page to try again.'); });
+
+  const ctx = canvas.getContext('webgpu');
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({ device, format, alphaMode: 'opaque' });
+
+  // ----- sim + mesh -----
+  const sim = new CitrusSim();
+  const mesh = buildSliceMesh();
+  const nv = mesh.rest.length / 3, nTri = mesh.idx.length / 3;
+  const embI = new Int32Array(nv * 8), embW = new Float32Array(nv * 8), d0 = new Float32Array(nv * 3);
+  for (let v = 0; v < nv; v++) {
+    const e = sim.embed(mesh.rest[v * 3], mesh.rest[v * 3 + 1], mesh.rest[v * 3 + 2]);
+    embI.set(e.idx, v * 8); embW.set(e.w, v * 8);
+    const q = sim.pointOf(e, sim.X0);
+    d0[v * 3] = mesh.rest[v * 3] - q[0]; d0[v * 3 + 1] = mesh.rest[v * 3 + 1] - q[1]; d0[v * 3 + 2] = mesh.rest[v * 3 + 2] - q[2];
+  }
+  const vpos = new Float32Array(nv * 3), vnrm = new Float32Array(nv * 3), vdyn = new Float32Array(nv * 6);
+  function skin() {
+    const X = sim.x, R = sim.rotM;
+    for (let v = 0; v < nv; v++) {
+      let px = 0, py = 0, pz = 0; const o = v * 8;
+      for (let k = 0; k < 8; k++) { const n = embI[o + k] * 3, w = embW[o + k]; px += w * X[n]; py += w * X[n + 1]; pz += w * X[n + 2]; }
+      const dx = d0[v * 3], dy = d0[v * 3 + 1], dz = d0[v * 3 + 2];
+      vpos[v * 3] = px + R[0] * dx + R[3] * dy + R[6] * dz;
+      vpos[v * 3 + 1] = py + R[1] * dx + R[4] * dy + R[7] * dz;
+      vpos[v * 3 + 2] = pz + R[2] * dx + R[5] * dy + R[8] * dz;
+    }
+    vnrm.fill(0);
+    const I = mesh.idx;
+    for (let t = 0; t < I.length; t += 3) {
+      const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      const ux = vpos[b] - vpos[a], uy = vpos[b + 1] - vpos[a + 1], uz = vpos[b + 2] - vpos[a + 2];
+      const wx = vpos[c] - vpos[a], wy = vpos[c + 1] - vpos[a + 1], wz = vpos[c + 2] - vpos[a + 2];
+      const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+      vnrm[a] += nx; vnrm[a + 1] += ny; vnrm[a + 2] += nz; vnrm[b] += nx; vnrm[b + 1] += ny; vnrm[b + 2] += nz; vnrm[c] += nx; vnrm[c + 1] += ny; vnrm[c + 2] += nz;
+    }
+    for (let v = 0; v < nv; v++) {
+      const o = v * 3; let nx = vnrm[o], ny = vnrm[o + 1], nz = vnrm[o + 2]; const l = Math.hypot(nx, ny, nz) || 1;
+      vdyn[v * 6] = vpos[o]; vdyn[v * 6 + 1] = vpos[o + 1]; vdyn[v * 6 + 2] = vpos[o + 2];
+      vdyn[v * 6 + 3] = nx / l; vdyn[v * 6 + 4] = ny / l; vdyn[v * 6 + 5] = nz / l;
+    }
+  }
+
+  // ----- GPU resources -----
+  const mkBuf = (data, usage) => { const b = device.createBuffer({ size: Math.ceil(data.byteLength / 4) * 4, usage: usage | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(b, 0, data); return b; };
+  const dynBuf = device.createBuffer({ size: vdyn.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+  const restBuf = mkBuf(mesh.rest, GPUBufferUsage.VERTEX);
+  const idxBuf = mkBuf(mesh.idx, GPUBufferUsage.INDEX);
+  const partData = new Float32Array(sim.N * 4);
+  const partBuf = device.createBuffer({ size: partData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  const wireIdx = new Uint32Array(sim.ne * 2);
+  for (let e = 0; e < sim.ne; e++) { wireIdx[e * 2] = sim.eA[e]; wireIdx[e * 2 + 1] = sim.eB[e]; }
+  const wireBuf = mkBuf(wireIdx, GPUBufferUsage.INDEX);
+  const uData = new Float32Array(128);
+  const uBuf = device.createBuffer({ size: uData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  uData.set(makeBubbles(16), 64);
+
+  const module = device.createShaderModule({ code: WGSL });
+  const bgl = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+    { binding: 1, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
+  ] });
+  const layout = device.createPipelineLayout({ bindGroupLayouts: [bgl] });
+  const bindGroup = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uBuf } }, { binding: 1, resource: { buffer: partBuf } }] });
+  const SAMPLES = 4;
+  const slicePipe = device.createRenderPipeline({
+    layout,
+    vertex: { module, entryPoint: 'vsSlice', buffers: [
+      { arrayStride: 24, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }] },
+      { arrayStride: 12, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x3' }] },
+    ] },
+    fragment: { module, entryPoint: 'fsSlice', targets: [{ format }] },
+    primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+    depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    multisample: { count: SAMPLES },
+  });
+  const shadowPipe = device.createRenderPipeline({
+    layout,
+    vertex: { module, entryPoint: 'vsShadow' },
+    fragment: { module, entryPoint: 'fsShadow', targets: [{ format: 'r16float', blend: {
+      color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+      alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' } } }] },
+    primitive: { topology: 'triangle-list' },
+  });
+  const texBgl = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+  ] });
+  const floorPipe = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bgl, texBgl] }),
+    vertex: { module, entryPoint: 'vsFloor' },
+    fragment: { module, entryPoint: 'fsFloor', targets: [{ format }] },
+    primitive: { topology: 'triangle-list' },
+    depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' },
+    multisample: { count: SAMPLES },
+  });
+  const linSamp = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+  let shadowTex, floorBG;
+  const wirePipe = device.createRenderPipeline({
+    layout,
+    vertex: { module, entryPoint: 'vsWire' },
+    fragment: { module, entryPoint: 'fsWire', targets: [{ format, blend: {
+      color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+      alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }] },
+    primitive: { topology: 'line-list' },
+    depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' },
+    multisample: { count: SAMPLES },
+  });
+
+  let msaaTex, depthTex, W = 0, H = 0;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (w === W && h === H) return;
+    W = w; H = h; canvas.width = w; canvas.height = h;
+    msaaTex?.destroy(); depthTex?.destroy();
+    msaaTex = device.createTexture({ size: [w, h], format, sampleCount: SAMPLES, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    depthTex = device.createTexture({ size: [w, h], format: 'depth24plus', sampleCount: SAMPLES, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    shadowTex?.destroy();
+    shadowTex = device.createTexture({ size: [Math.max(1, w >> 2), Math.max(1, h >> 2)], format: 'r16float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+    floorBG = device.createBindGroup({ layout: texBgl, entries: [{ binding: 0, resource: shadowTex.createView() }, { binding: 1, resource: linSamp }] });
+    const panel = document.querySelector('.panel').getBoundingClientRect();
+    document.documentElement.style.setProperty('--panel-top', panel.top + 'px');
+  }
+
+  // ----- camera -----
+  const cam = { eye: [0, 0, 0], fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0], tanY: 0.3, aspect: 1, ox: 0, oy: 0, vp: null };
+  function updateCamera() {
+    const w = canvas.clientWidth, h = canvas.clientHeight, aspect = w / h, mobile = w < 760;
+    const target = [0, 0.42, 0], yaw = 0.36, pitch = 0.36, dist = mobile ? 6.4 : 6.2;
+    const eye = [target[0] + dist * Math.sin(yaw) * Math.cos(pitch), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(yaw) * Math.cos(pitch)];
+    let tanY = Math.tan((mobile ? 26 : 28) * Math.PI / 360);
+    const needHalfW = (mobile ? 1.32 : 1.7) / dist;
+    if (tanY * aspect < needHalfW) tanY = needHalfW / aspect;
+    const ox = mobile ? 0 : 0.02, oy = mobile ? 0.2 : -0.06;
+    const P = perspective(2 * Math.atan(tanY), aspect, 0.1, 50);
+    const S = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ox, oy, 0, 1]);
+    const Vw = lookAt(eye, target, [0, 1, 0]);
+    cam.vp = mul4(S, mul4(P, Vw));
+    cam.eye = eye; cam.fwd = norm(sub(target, eye)); cam.right = norm(cross(cam.fwd, [0, 1, 0])); cam.up = cross(cam.right, cam.fwd);
+    cam.tanY = tanY; cam.aspect = aspect; cam.ox = ox; cam.oy = oy;
+  }
+  function rayFrom(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    const nx = ((clientX - r.left) / r.width) * 2 - 1 - cam.ox, ny = 1 - ((clientY - r.top) / r.height) * 2 - cam.oy;
+    const d = norm(add(cam.fwd, add(scl(cam.right, nx * cam.tanY * cam.aspect), scl(cam.up, ny * cam.tanY))));
+    return { o: cam.eye.slice(), d };
+  }
+  function pick(ray) {
+    const I = mesh.idx, P = vpos; let best = Infinity, bt = -1, bu = 0, bv = 0;
+    const [ox, oy, oz] = ray.o, [dx, dy, dz] = ray.d;
+    for (let t = 0; t < I.length; t += 3) {
+      const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+      const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+      const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+      const det = e1x * px + e1y * py + e1z * pz; if (Math.abs(det) < 1e-12) continue;
+      const inv = 1 / det, tx = ox - P[a], ty = oy - P[a + 1], tz = oz - P[a + 2];
+      const uu = (tx * px + ty * py + tz * pz) * inv; if (uu < 0 || uu > 1) continue;
+      const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+      const vv = (dx * qx + dy * qy + dz * qz) * inv; if (vv < 0 || uu + vv > 1) continue;
+      const tt = (e2x * qx + e2y * qy + e2z * qz) * inv;
+      if (tt > 0 && tt < best) { best = tt; bt = t; bu = uu; bv = vv; }
+    }
+    if (bt < 0) return null;
+    const ia = I[bt], ib = I[bt + 1], ic = I[bt + 2], w0 = 1 - bu - bv, R0 = mesh.rest;
+    const rest = [0, 1, 2].map(d => w0 * R0[ia * 3 + d] + bu * R0[ib * 3 + d] + bv * R0[ic * 3 + d]);
+    const world = add(ray.o, scl(ray.d, best));
+    return { rest, world };
+  }
+
+  // ----- state & UI -----
+  const state = { paused: false, slow: false, mesh: false, preset: 'orange', grab: null, acc: 0, hoverQueued: null };
+  function applyPreset(name) {
+    const p = PRESETS[name]; state.preset = name;
+    uData.set([...hexLin(p.flesh), 1], 32); uData.set([...hexLin(p.deep), 1], 36); uData.set([...hexLin(p.membrane), 1], 40);
+    uData.set([...hexLin(p.pith), 1], 44); uData.set([...hexLin(p.rind), 1], 48); uData.set([...p.shadow, 1], 60);
+    document.documentElement.style.setProperty('--accent', p.accent);
+    document.querySelectorAll('.swatch').forEach(b => b.setAttribute('aria-checked', b.dataset.preset === name ? 'true' : 'false'));
+  }
+  uData.set([...hexLin(BG), 1], 52);
+  uData.set([1.0, 0.026, 0, 0], 56); // exposure, shadow strength
+  applyPreset('orange');
+
+  const setRange = (el) => el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%');
+  const firm = $('firm'), damp = $('damp');
+  firm.addEventListener('input', () => { sim.firmness = firm.value / 100; $('firmOut').textContent = firm.value; setRange(firm); });
+  damp.addEventListener('input', () => { sim.damping = damp.value / 100; $('dampOut').textContent = damp.value; setRange(damp); });
+  setRange(firm); setRange(damp);
+  sim.firmness = firm.value / 100; sim.damping = damp.value / 100;
+  $('nudge').addEventListener('click', () => { endGrab(); if (state.paused) togglePause(); sim.nudge(); });
+  $('reset').addEventListener('click', () => { endGrab(); sim.reset(); state.acc = 0; });
+  const togglePause = () => { state.paused = !state.paused; $('pause').textContent = state.paused ? 'Resume' : 'Pause'; $('pause').setAttribute('aria-pressed', String(state.paused)); };
+  $('pause').addEventListener('click', togglePause);
+  $('mesh').addEventListener('change', (e) => { state.mesh = e.target.checked; });
+  $('slow').addEventListener('change', (e) => { state.slow = e.target.checked; });
+  document.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' && e.target.type === 'range') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'r' || e.key === 'R') $('reset').click();
+    else if (e.key === 'n' || e.key === 'N') $('nudge').click();
+  });
+
+  // ----- grabbing -----
+  function planeHit(ray, g) {
+    const denom = dot(ray.d, g.n); if (Math.abs(denom) < 1e-6) return null;
+    const t = dot(sub(g.p0, ray.o), g.n) / denom; if (t < 0) return null;
+    return add(ray.o, scl(ray.d, t));
+  }
+  function targetFor(ray, g) {
+    const hit = planeHit(ray, g); if (!hit) return null;
+    const t = add(hit, g.offset);
+    t[1] = Math.max(t[1], 0.02); t[0] = Math.max(-2.2, Math.min(2.2, t[0])); t[2] = Math.max(-1.6, Math.min(1.6, t[2])); t[1] = Math.min(t[1], 3.5);
+    return t;
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state.grab) return;
+    const ray = rayFrom(e.clientX, e.clientY);
+    const hit = pick(ray); if (!hit) return;
+    e.preventDefault();
+    const emb = sim.embed(hit.rest[0], hit.rest[1], hit.rest[2]);
+    const pNow = sim.pointOf(emb);
+    sim.grab(emb, pNow);
+    state.grab = { id: e.pointerId, n: scl(cam.fwd, -1), p0: hit.world, offset: sub(pNow, hit.world) };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('grabbing');
+    $('hint').classList.add('quiet');
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (state.grab && e.pointerId === state.grab.id) {
+      const t = targetFor(rayFrom(e.clientX, e.clientY), state.grab); if (t) sim.setTarget(t);
+    } else if (e.pointerType === 'mouse') state.hoverQueued = [e.clientX, e.clientY];
+  });
+  function endGrab(e) {
+    if (!state.grab || (e && e.pointerId !== state.grab.id)) return;
+    sim.release();
+    try { canvas.releasePointerCapture(state.grab.id); } catch (_) {}
+    state.grab = null; canvas.classList.remove('grabbing');
+  }
+  canvas.addEventListener('pointerup', endGrab);
+  canvas.addEventListener('pointercancel', endGrab);
+  canvas.addEventListener('lostpointercapture', endGrab);
+
+  // ----- frame loop (fixed simulation step) -----
+  let last = performance.now(), fpsAcc = 0, fpsN = 0, fpsT = 0;
+  const meta = $('meta'), fpsEl = $('fps');
+  meta.textContent = `WebGPU · XPBD soft body · ${sim.N} particles · ${sim.ne + sim.nc} constraints`;
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    fpsAcc += dt; fpsN++; if (now - fpsT > 500) { fpsEl.textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; fpsT = now; }
+    resize(); updateCamera();
+    if (!state.paused) {
+      state.acc += dt * (state.slow ? 0.25 : 1);
+      let n = 0; while (state.acc >= sim.H && n < 8) { sim.step(); state.acc -= sim.H; n++; }
+      if (n === 8) state.acc = 0;
+    }
+    sim.updateRotation();
+    skin();
+    if (state.hoverQueued && !state.grab) {
+      const [cx, cy] = state.hoverQueued; state.hoverQueued = null;
+      canvas.classList.toggle('can-grab', !!pick(rayFrom(cx, cy)));
+    }
+    // uploads
+    device.queue.writeBuffer(dynBuf, 0, vdyn);
+    for (let i = 0; i < sim.N; i++) { partData[i * 4] = sim.x[i * 3]; partData[i * 4 + 1] = sim.x[i * 3 + 1]; partData[i * 4 + 2] = sim.x[i * 3 + 2]; partData[i * 4 + 3] = 1; }
+    device.queue.writeBuffer(partBuf, 0, partData);
+    uData.set(cam.vp, 0); uData.set([...cam.eye, now / 1000], 16);
+    const R = sim.rotM; uData.set([R[0], R[1], R[2], 0, R[3], R[4], R[5], 0, R[6], R[7], R[8], 0], 20);
+    device.queue.writeBuffer(uBuf, 0, uData);
+
+    const bg = hexSrgb(BG);
+    const enc = device.createCommandEncoder();
+    const sp = enc.beginRenderPass({ colorAttachments: [{ view: shadowTex.createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }] });
+    sp.setBindGroup(0, bindGroup); sp.setPipeline(shadowPipe); sp.draw(6, sim.N); sp.end();
+    const pass = enc.beginRenderPass({
+      colorAttachments: [{ view: msaaTex.createView(), resolveTarget: ctx.getCurrentTexture().createView(), clearValue: { r: bg[0], g: bg[1], b: bg[2], a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
+      depthStencilAttachment: { view: depthTex.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'discard' },
+    });
+    pass.setBindGroup(0, bindGroup);
+    pass.setPipeline(floorPipe); pass.setBindGroup(1, floorBG); pass.draw(3);
+    pass.setPipeline(slicePipe); pass.setVertexBuffer(0, dynBuf); pass.setVertexBuffer(1, restBuf); pass.setIndexBuffer(idxBuf, 'uint32'); pass.drawIndexed(mesh.idx.length);
+    if (state.mesh) { pass.setPipeline(wirePipe); pass.setIndexBuffer(wireBuf, 'uint32'); pass.drawIndexed(wireIdx.length); }
+    pass.end();
+    device.queue.submit([enc.finish()]);
+    requestAnimationFrame(frame);
+  }
+  window.citrus = { sim, state, cam, pick, rayFrom, ready: true };
+  requestAnimationFrame(frame);
+}
+main().catch((e) => { console.error(e); showFallback('Something went wrong while starting WebGPU: ' + (e.message || e)); });
+})();
+</script>
+</body>
+</html>
