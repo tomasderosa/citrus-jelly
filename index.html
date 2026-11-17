@@ -718,7 +718,10 @@ fn toSrgb(c: vec3f) -> vec3f {
   var T = vec3f(1.0);
   var L = vec3f(0.0);
   let dt = 0.026;
-  var t = 0.012;
+  // per-pixel start offset (interleaved gradient noise): breaks up the moiré banding that the
+  // thin radial membranes produce when the fixed-step march crosses them (visible on the flat base)
+  let jit = fract(52.9829189 * fract(dot(i.clip.xy, vec2f(0.06711056, 0.00583715))));
+  var t = 0.012 + dt * jit;
   for (var k = 0; k < 34; k++) {
     let p = i.rest + rd * t;
     let sd = sdSlice(p);
